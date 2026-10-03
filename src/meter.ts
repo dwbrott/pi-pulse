@@ -406,7 +406,7 @@ export class StatsMeter {
 
 		// E2E request latency: from before_provider_request (or message_start fallback) to now.
 		if (this.elapsedStart > 0) {
-			parts.push(`Elapsed ${theme.fg("dim", fmtElapsed(nowMs - this.elapsedStart))}`);
+			parts.push(`Δt ${theme.fg("dim", fmtElapsed(nowMs - this.elapsedStart))}`);
 		}
 
 		return parts.join(" | ");
@@ -437,7 +437,7 @@ export class StatsMeter {
 		}
 
 		if (hasElapsed) {
-			parts.push(`Elapsed ${theme.fg("dim", fmtElapsed(this.totalElapsedMs))}`);
+			parts.push(`Δt ${theme.fg("dim", fmtElapsed(this.totalElapsedMs))}`);
 		}
 
 		return parts.join(" | ");
