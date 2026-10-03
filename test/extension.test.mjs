@@ -210,7 +210,7 @@ test("session_shutdown persists snapshot and session_start restores it", async (
 		const restored = ctx2.statuses.find((s) => s.key === "tps" && s.text !== undefined);
 		assert.ok(restored, `expected restored footer after session_start, got ${JSON.stringify(ctx2.statuses)}`);
 		assert.ok(restored.text.includes("TTFT"), `expected TTFT in restored footer: ${restored.text}`);
-		assert.ok(restored.text.includes("Elapsed"), `expected Elapsed in restored footer: ${restored.text}`);
+		assert.ok(restored.text.includes("Δt"), `expected Δt in restored footer: ${restored.text}`);
 	});
 });
 
@@ -257,7 +257,7 @@ test("session_start restores the latest snapshot from a branch with multiple ent
 		// The latest snapshot has totalElapsedMs: 100 -> "Elapsed" is rendered.
 		// The stale snapshot has totalElapsedMs: 0 -> renderFinal returns "" -> no status pushed.
 		// A non-empty restored footer therefore proves the LATEST snapshot was picked.
-		assert.ok(restored.text.includes("Elapsed"), `expected Elapsed from latest snapshot: ${restored.text}`);
+		assert.ok(restored.text.includes("Δt"), `expected Δt from latest snapshot: ${restored.text}`);
 	});
 });
 
@@ -315,7 +315,7 @@ test("ticker renders deterministic values with an injected fake-clock meter", as
 
 		assert.ok(live, "expected a live status render from the ticker");
 		assert.ok(live.text.includes("0.30s"), `expected TTFT 0.30s in live footer: ${live.text}`);
-		assert.ok(live.text.includes("Elapsed "), `expected Elapsed segment in live footer: ${live.text}`);
+		assert.ok(live.text.includes("Δt "), `expected Δt segment in live footer: ${live.text}`);
 	});
 });
 
@@ -334,10 +334,10 @@ test("wall-clock timestamp is appended after Elapsed in the final footer", async
 
 		const final = ctx.statuses.filter((s) => s.key === "tps" && s.text !== undefined).pop();
 		assert.ok(final, "expected a final status");
-		assert.ok(final.text.includes("Elapsed"), `expected Elapsed segment: ${final.text}`);
+		assert.ok(final.text.includes("Δt"), `expected Δt segment: ${final.text}`);
 		assert.ok(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z/.test(final.text), `expected trailing clock timestamp: ${final.text}`);
-		// The clock must appear after Elapsed.
-		assert.ok(final.text.indexOf("Elapsed") < final.text.search(/\d{4}-\d{2}-\d{2}T/), `clock should follow Elapsed: ${final.text}`);
+		// The clock must appear after Δt.
+		assert.ok(final.text.indexOf("Δt") < final.text.search(/\d{4}-\d{2}-\d{2}T/), `clock should follow Δt: ${final.text}`);
 	});
 });
 

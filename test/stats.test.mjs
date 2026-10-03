@@ -69,7 +69,7 @@ test("single assistant message produces a formatted footer end-to-end", async ()
 		assert.ok(final, "expected a final footer status");
 		assert.ok(/^TPS /.test(final), `expected TPS first in ${final}`);
 		assert.ok(final.includes("TTFT"), `expected TTFT in ${final}`);
-		assert.ok(final.includes("Elapsed"), `expected Elapsed in ${final}`);
+		assert.ok(final.includes("Δt"), `expected Δt in ${final}`);
 	});
 });
 
@@ -123,6 +123,6 @@ test("snapshot persists across shutdown and restores on reload", async () => {
 		const restored = lastStatus(ctx2.statuses);
 		assert.ok(restored, "expected restored footer after session_start");
 		assert.ok(restored.includes("TTFT"), `expected TTFT in restored: ${restored}`);
-		assert.ok(restored.includes("Elapsed"), `expected Elapsed in restored: ${restored}`);
+		assert.ok(restored.includes("Δt"), `expected Δt in restored: ${restored}`);
 	});
 });

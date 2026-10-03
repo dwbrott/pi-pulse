@@ -65,7 +65,7 @@ test("single assistant message records TTFT, TPS, elapsed and graph", () => {
 	const final = meter.renderFinal(theme);
 	assert.ok(final.includes("[error:13] avg"), `expected colored 13 avg in ${final}`);
 	assert.ok(final.includes("0.20s"), `expected "0.20s" TTFT in ${final}`);
-	assert.ok(final.includes("Elapsed [dim:0.6s]"), `expected frozen elapsed in ${final}`);
+	assert.ok(final.includes("Δt [dim:0.6s]"), `expected frozen elapsed in ${final}`);
 });
 
 test("effective TPS is suppressed during the first 300 ms", () => {
@@ -163,7 +163,7 @@ test("multiple messages accumulate all-time TPS stats", () => {
 	assert.ok(final.includes("μ 10"), `expected mean 10 in ${final}`);
 	assert.ok(final.includes("p10 10"), `expected p10 10 in ${final}`);
 	assert.ok(final.includes("p95 10"), `expected p95 10 in ${final}`);
-	assert.ok(final.includes("Elapsed [dim:5s]"), `expected total elapsed 5s in ${final}`);
+	assert.ok(final.includes("Δt [dim:5s]"), `expected total elapsed 5s in ${final}`);
 });
 
 test("graph buffer wraps at GRAPH_DOTS samples", () => {
@@ -257,7 +257,7 @@ test("serialize and restore preserves metrics across meters", () => {
 	const final = meter2.renderFinal(theme);
 	assert.ok(final.includes("μ 13"), `expected mean TPS after restore: ${final}`);
 	assert.ok(final.includes("TTFT"), `expected TTFT after restore: ${final}`);
-	assert.ok(final.includes("Elapsed [dim:1s]"), `expected 1s elapsed after restore: ${final}`);
+	assert.ok(final.includes("Δt [dim:1s]"), `expected 1s elapsed after restore: ${final}`);
 });
 
 test("p95 is computed correctly across many distinct values", () => {
@@ -437,7 +437,7 @@ test("count cap protects against unbounded growth even without trim", () => {
 	assert.strictEqual(s.tpsSamplesRecent, s.tpsSamples);
 });
 
-test("renderFinal shows only Elapsed when window is empty", () => {
+test("renderFinal shows only Δt when window is empty", () => {
 	const clock = makeClock(1000);
 	const meter = createMeter({ now: clock.now });
 
@@ -453,7 +453,7 @@ test("renderFinal shows only Elapsed when window is empty", () => {
 	let final = meter.renderFinal(theme);
 	assert.ok(final.includes("TPS"), `expected TPS before aging: ${final}`);
 	assert.ok(final.includes("TTFT"), `expected TTFT before aging: ${final}`);
-	assert.ok(final.includes("Elapsed"), `expected Elapsed before aging: ${final}`);
+	assert.ok(final.includes("Δt"), `expected Δt before aging: ${final}`);
 
 	// Advance past the 10-minute window so all rate samples expire.
 	clock.advance(11 * 60 * 1000);
@@ -462,7 +462,7 @@ test("renderFinal shows only Elapsed when window is empty", () => {
 	final = meter.renderFinal(theme);
 	assert.ok(!final.includes("TPS"), `expected no TPS after aging: ${final}`);
 	assert.ok(!final.includes("TTFT"), `expected no TTFT after aging: ${final}`);
-	assert.ok(final.includes("Elapsed"), `expected Elapsed after aging: ${final}`);
+	assert.ok(final.includes("Δt"), `expected Δt after aging: ${final}`);
 });
 
 test("inspect exposes windowed sample counts", () => {
