@@ -1,0 +1,175 @@
+/**
+ * pi-pulse — Live TPS, TTFT, and response-time footer for pi.
+ *
+ * Displays a single-line footer under the "tps" status key:
+ *
+ *   TPS ⣤⣸⠀⠀ 42 avg | μ 38 | p10 25 | p95 55 | TTFT μ 0.25s | Elapsed 15s
+ *
+ * Metrics:
+ *   - TPS: tokens per second during assistant text/thinking/tool-call-stream output
+ *   - TTFT: mean time from `before_provider_request` to first assistant output token
+ *   - Elapsed: duration of the current response while streaming, then the
+ *     accumulated total across completed responses while idle.
+ *
+ * Built as a Pi package. Source lives in `src/`; Pi loads the compiled
+ * output declared in `package.json#pi.extensions`.
+ */
+import { CLOCK_MS, SNAPSHOT_TYPE, TICK_MS } from "./constants.js";
+import { fmtClock } from "./format.js";
+import { createMeter, isMeterSnapshot } from "./meter.js";
+/** Called once per Pi session when this extension is loaded. */
+export default function piPulseExtension(pi, deps) {
+    const meter = deps?.meter ?? createMeter();
+    let tickTimer = null;
+    let clockTimer = null;
+    let abortCleanup = null;
+    function startTick(ctx) {
+        if (tickTimer)
+            return;
+        tickTimer = setInterval(() => {
+            if (!meter.isStreaming())
+                return;
+            safeSetStatus(ctx, "tps", appendClock(meter.renderLive(ctx.ui.theme), ctx.ui.theme));
+        }, TICK_MS);
+        // If the current turn is aborted, stop ticking immediately so we don't
+        // keep rendering status while the runner is tearing down the stream.
+        const signal = ctx.signal;
+        if (signal && !signal.aborted) {
+            const onAbort = () => stopTick();
+            signal.addEventListener("abort", onAbort, { once: true });
+            abortCleanup = () => signal.removeEventListener("abort", onAbort);
+        }
+    }
+    function stopTick() {
+        if (tickTimer) {
+            clearInterval(tickTimer);
+            tickTimer = null;
+        }
+        if (abortCleanup) {
+            abortCleanup();
+            abortCleanup = null;
+        }
+    }
+    // Session-scoped ticker that keeps the idle footer (and its trailing
+    // wall-clock timestamp) fresh every second. It bails while streaming, where
+    // the faster live ticker (TICK_MS) already re-renders. Started on
+    // session_start and cleared in reset()/session_shutdown so no interval
+    // outlives the session — and so the captured ctx is dropped before it can
+    // go stale after a reload/session replacement.
+    function startClock(ctx) {
+        if (clockTimer || !ctx.hasUI)
+            return;
+        clockTimer = setInterval(() => {
+            if (meter.isStreaming())
+                return;
+            renderIdle(ctx);
+        }, CLOCK_MS);
+    }
+    function stopClock() {
+        if (clockTimer) {
+            clearInterval(clockTimer);
+            clockTimer = null;
+        }
+    }
+    function safeSetStatus(ctx, key, text) {
+        if (!ctx.hasUI)
+            return;
+        try {
+            ctx.ui.setStatus(key, text);
+        }
+        catch {
+            // Footer rendering is best-effort; a rendering error should not bring down Pi.
+        }
+    }
+    /** Append the ticking wall-clock timestamp to a footer segment. */
+    function appendClock(text, theme) {
+        const clock = theme.fg("dim", fmtClock());
+        return text ? `${text} | ${clock}` : clock;
+    }
+    /** Render the idle footer (final metrics + clock) when there is metric data. */
+    function renderIdle(ctx) {
+        const text = meter.renderFinal(ctx.ui.theme);
+        if (text)
+            safeSetStatus(ctx, "tps", appendClock(text, ctx.ui.theme));
+    }
+    function reset(ctx) {
+        stopTick();
+        stopClock();
+        meter.reset();
+        safeSetStatus(ctx, "tps", undefined);
+    }
+    function isAssistantMessage(message) {
+        return message.role === "assistant";
+    }
+    function findLatestSnapshot(ctx) {
+        if (!ctx.sessionManager?.getBranch)
+            return undefined;
+        const branch = ctx.sessionManager.getBranch();
+        if (!Array.isArray(branch))
+            return undefined;
+        for (let i = branch.length - 1; i >= 0; i--) {
+            const entry = branch[i];
+            if (entry &&
+                entry.type === "custom" &&
+                entry.customType === SNAPSHOT_TYPE &&
+                isMeterSnapshot(entry.data)) {
+                return entry.data;
+            }
+        }
+        return undefined;
+    }
+    pi.on("session_start", async (event, ctx) => {
+        reset(ctx);
+        // New/forked sessions start fresh (architecture.md §5.2); only the same
+        // underlying session file restores a snapshot.
+        if (event.reason === "new" || event.reason === "fork") {
+            startClock(ctx);
+            return;
+        }
+        const snapshot = findLatestSnapshot(ctx);
+        if (snapshot)
+            meter.restore(snapshot);
+        renderIdle(ctx);
+        startClock(ctx);
+    });
+    pi.on("before_provider_request", async () => {
+        meter.markRequestStart();
+    });
+    pi.on("message_start", async (event, ctx) => {
+        if (!isAssistantMessage(event.message))
+            return;
+        meter.startAssistantMessage();
+        if (ctx.hasUI)
+            startTick(ctx);
+    });
+    pi.on("message_update", async (event) => {
+        if (!isAssistantMessage(event.message))
+            return;
+        const payload = event.assistantMessageEvent;
+        // Streamed assistant output: text, reasoning, or tool-call parameters.
+        if (payload.type === "text_delta" ||
+            payload.type === "thinking_delta" ||
+            payload.type === "toolcall_delta") {
+            meter.addDelta(payload.type, payload.delta ?? "");
+            return;
+        }
+        // Non-streamed tool call (toolcall_start with no deltas): no token stream,
+        // but it is still the first model output of the turn, so it stops the TTFT timer.
+        if (payload.type === "toolcall_start") {
+            meter.markFirstToken();
+        }
+    });
+    pi.on("message_end", async (event, ctx) => {
+        if (!isAssistantMessage(event.message))
+            return;
+        stopTick();
+        meter.endAssistantMessage();
+        renderIdle(ctx);
+    });
+    pi.on("session_shutdown", async (_event, ctx) => {
+        if (meter.hasData() && typeof pi.appendEntry === "function") {
+            pi.appendEntry(SNAPSHOT_TYPE, meter.serialize());
+        }
+        reset(ctx);
+    });
+}
